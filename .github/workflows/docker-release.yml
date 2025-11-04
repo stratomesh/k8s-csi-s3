@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*" # Triggers when you push a tag starting with 'v' (e.g., v0.43.2, v1.0.0)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Step 2: Set up QEMU (emulator for cross-platform builds)
+      # This allows building ARM64 images on an AMD64 machine
+      # Without this, you can only build for the runner's native architecture
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # Required to use the --platform flag with multiple architectures
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        run: echo '${{ secrets.DOCKERHUB_TOKEN }}' | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+
+      # Step 5: Extract version number from the git tag
+      # Example: tag "v0.43.2" becomes version "0.43.2"
+      # This is stored in the 'version' output variable for use in next steps
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Docker
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t stratomesh/k8s-csi-s3:${{ steps.version.outputs.version }} \
+            --push \
+            .
